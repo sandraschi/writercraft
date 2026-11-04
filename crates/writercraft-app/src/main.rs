@@ -11,6 +11,7 @@ struct Args {
 
 pub struct WriterCraftApp {
     engine: WriterEngine,
+    locale: writercraft_core::i18n::AppLocale,
     status_msg: String,
     is_dark_theme: bool,
     is_authenticated: bool,
@@ -24,6 +25,7 @@ impl WriterCraftApp {
     pub fn new() -> Self {
         Self {
             engine: WriterEngine::new(),
+            locale: writercraft_core::i18n::AppLocale::default(),
             status_msg: "Writer & Corkboard Studio Ready (Port 14121)".to_string(),
             is_dark_theme: true,
             is_authenticated: false,
@@ -104,6 +106,17 @@ impl eframe::App for WriterCraftApp {
                 });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let cur_loc = self.locale;
+                    let label = format!("{} {}", cur_loc.flag(), cur_loc.code().to_uppercase());
+                    egui::ComboBox::from_id_salt("topbar_locale_selector")
+                        .selected_text(label)
+                        .show_ui(ui, |ui| {
+                            for loc_item in writercraft_core::i18n::AppLocale::all() {
+                                let text = format!("{} {}", loc_item.flag(), loc_item.display_name());
+                                let _ = ui.selectable_value(&mut self.locale, *loc_item, text);
+                            }
+                        });
+
                     let (icon, label) = if self.is_dark_theme { ("☀", "Light") } else { ("🌙", "Dark") };
                     if ui.small_button(format!("{icon} {label}")).clicked() {
                         self.is_dark_theme = !self.is_dark_theme;

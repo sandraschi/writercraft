@@ -3,6 +3,8 @@
 //! Provides corkboard scene graph management, narrative tension curve analysis,
 //! and book manuscript project persistence backed by DatabaseCraft.
 
+pub mod i18n;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use writercraft_narrative::{NarrativeModel, SceneCard};
