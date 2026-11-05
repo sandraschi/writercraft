@@ -3,7 +3,7 @@ use serde_json::json;
 use writercraft_core::WriterEngine;
 
 #[derive(Parser, Debug)]
-#[command(name = "writercraft", about = "WriterCraft Sovereign Narrative & Corkboard Studio")]
+#[command(name = "writercraft", about = "WriterCraft Local Narrative & Corkboard Studio")]
 struct Args {
     #[arg(long)]
     smoke: bool,

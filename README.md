@@ -1,6 +1,6 @@
 # WriterCraft & ScholarCraft
 
-**WriterCraft** is an ArtCraft-tier sovereign narrative architecture, TV Tropes indexation, corkboard scene manager, and academic publishing studio running entirely offline without cloud extraction.
+**WriterCraft** is an ArtCraft-tier local-first narrative architecture, TV Tropes indexation, corkboard scene manager, and academic publishing studio running entirely offline without cloud extraction.
 
 Features:
 - **Corkboard Scene Cards**: Formalized dramatically via POV character, dramatic goal, conflict obstacle, disaster outcome, and emotional valence $[-1.0, +1.0]$.

@@ -9,7 +9,7 @@ use writercraft_core::WriterEngine;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port: u16 = 14121;
-    println!("[writercraft-mcp] Initializing Sovereign Writer & Scholar Studio FastMCP engine on port {}...", port);
+    println!("[writercraft-mcp] Initializing Local Writer & Scholar Studio FastMCP engine on port {}...", port);
 
     let engine = WriterEngine::new();
     let arc = engine.analyze_narrative_arc()?;

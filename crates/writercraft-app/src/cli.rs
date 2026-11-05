@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use writercraft_core::WriterEngine;
 
 #[derive(Parser)]
-#[command(name = "writercraft-cli", about = "WriterCraft Sovereign Corkboard & Narrative Arc CLI")]
+#[command(name = "writercraft-cli", about = "WriterCraft Local Corkboard & Narrative Arc CLI")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
