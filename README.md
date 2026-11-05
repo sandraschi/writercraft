@@ -33,6 +33,16 @@ cargo test
 ./target/debug/writercraft-cli.exe arc
 ```
 
+## Status — does today / next week / non-goals
+
+**Does today:** 4-crate Rust workspace (narrative/core split), scene/beat
+model, CLI verbs declared, 1 test fn.
+
+**Next week:** PRD with fiction-first scope + bookcraft boundary;
+scene-graph fixture tests; scene-pack recipe.
+
+**Non-goals:** not a LaTeX distribution; trope-data licensing still open.
+
 ## Lineage — the Storytold craft-app pattern
 
 Storytold ArtCraft ([storytold/artcraft](https://github.com/storytold/artcraft) — "the IDE for artists") was the starting point. The 16 craft apps in the Storytold stable each ship one binary that is both the human CLI and the agent MCP server (stdio), headless-first, with `run.json` + report artifacts. That modus operandi and harness is what this repo implements; the code here is independent, the pattern is shared.
