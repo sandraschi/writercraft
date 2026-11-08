@@ -1,0 +1,1 @@
+45b63d57ee21e86d7ed209000601956e2111212c7bc05a8fa964a77437f46c2f  writercraft-0.1.0-windows-x64-portable.zip
