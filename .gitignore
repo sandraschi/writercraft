@@ -1,5 +1,10 @@
-/target
+target/
+**/target/
 **/*.rs.bk
 *.dbcraft
 *.bak
 *.exe
+dist/
+outbox/
+# Kibitzer side-channel (gitignored, polled by Antigravity, refreshed 2x/day)
+KIBITZ.md
