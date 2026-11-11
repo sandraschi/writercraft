@@ -1,8 +1,8 @@
 # WriterCraft — HANDOVER.md
 
-**Date:** 2026-11-10  
-**Status:** v0.3.1 — Complete Multi-Persona Studio, Calibre Connector, AI Writing Companion, Staged Syndication Engine, and Craft Delectations Library.  
-**Verification:** 13/13 tests passing (`cargo test --manifest-path writercraft/Cargo.toml`), `--smoke` passes with code 0 (14 capabilities).
+**Date:** 2026-11-11  
+**Status:** v0.3.1 (Tier 4 / Sovereign Epistemic Production Grade) — Multi-Persona Studio, Calibre Connector, AI Writing Companion, Epistemic Matrix Engine, Idiolect Profiler, Tension Waveform Painter, and Fleet Epistemic Harmonizer.  
+**Verification:** 16/16 tests passing (`cargo test --manifest-path writercraft/Cargo.toml`), `--smoke` passes with code 0 (17 capabilities, 5 fleet books detected, 13 Calibre libraries detected).
 
 ---
 
@@ -34,37 +34,44 @@
 
 5. **GUI & CLI Overhaul (`crates/writercraft-app`)**:
    - 6 dedicated workspaces: Fleet Studio, Calibre Connector, Corkboard & Arcs, Screenplay (Fountain), Scholar & BibTeX, and Craft Delectations.
-   - Subcommands added: `calibre-libs`, `calibre-search`, `book`, `deep`, `continue`, `lint`, `draft-next`, `syndicate`, `essays`, `essay`.
+   - Subcommands added: `calibre-libs`, `calibre-search`, `book`, `deep`, `continue`, `lint`, `draft-next`, `syndicate`, `essays`, `essay`, `epistemic`, `idiolect`, `fleet-harmonize`.
 
 6. **In-App Craft Delectations & Trope Library (`crates/writercraft-core/src/delectation.rs`)**:
-   - Compiles all 5 rich literary treatises directly into the desktop studio with generous prose typography, headings, blockquotes, and tables:
-     - `dialectic`: *The Writer & His AI Companion* (Asymmetry, 35+ Claude-ese crutches, classical rhetoric subversion, 20-antipattern human correction matrix).
-     - `canon`: *What Makes Classics Classics?* (Dickens, Dostoevsky, and the Brontës: Bakhtin's polyphony, grotesque particularity, unpayable moral debt, and civilizational seismology).
-     - `frontier`: *The Speculative Frontier & The RSI Novel* (Hard Sci-Fi classics: Gibson, Stephenson, Egan; the sci-fi hiatus; how Iain M. Banks bypassed the superior-mind paradox in The Culture; the anatomy of the great Recursive Self-Improvement novel).
-     - `tropes`: *The Cliché Motherlode & Trope Smorgasbord* (Romance, Sci-Fi, Action/Thrillers, Prestige Gloom, and the Frankenstein Smorgasbord Scaffold).
-     - `publishing`: *Publishing Avenues & The Cautionary Tale* (The Coral Hart 370-book-a-year churn vs durable backlist architecture).
+   - Compiles all 5 rich literary treatises directly into the desktop studio with generous prose typography:
+     - `dialectic`: *The Writer & His AI Companion*
+     - `canon`: *What Makes Classics Classics?*
+     - `frontier`: *The Speculative Frontier & The RSI Novel*
+     - `tropes`: *The Cliché Motherlode & Trope Smorgasbord*
+     - `publishing`: *Publishing Avenues & The Cautionary Tale*
    - Interactive essay integration: one-click loading of the 7-beat Frankenstein Smorgasbord Scaffold into the Corkboard cards, instant style auditing, and zero-lock Calibre classics searching.
-   - FastMCP tools expanded to 19 total tools (`writercraft_list_craft_essays`, `writercraft_read_craft_essay`, `writercraft_frankenstein_beats`).
+
+7. **Tier 4 Sovereign Epistemic Knowledge Matrix, Voice Profiler & Harmonizer**:
+   - **Epistemic Knowledge Matrix (`crates/writercraft-core/src/epistemic_matrix.rs`)**: Models characters' knowledge states (`Ignorant`, `Suspected`, `Known`, `Misinformed`) across narrative scenes. Validates action prerequisites and detects `PrematureKnowledgeLeak` and `ContradictoryBeliefAction`. Reconciles narrative reading sequence (Syuzhet) with in-universe chronological order (Fabula) with automatic flashback detection.
+   - **Character Idiolect & Dialogue Voice Profiler (`crates/writercraft-core/src/idiolect.rs`)**: Analyzes Fountain dialogue cues and prose manuscripts, computing speaking turns, word count allocation, Type-Token Ratio (TTR), contraction frequency (formal vs informal), sentence length variance, and overall voice divergence $[0.0, 1.0]$.
+   - **POV Head-Hopping Detector**: Deterministically scans third-person limited prose manuscripts for non-POV characters performing internal cognitive verbs (*thought*, *felt*, *knew*, *wondered*, *realized*, *secretly wanted*, *believed in their heart*).
+   - **Interactive Tension Waveform Painter (`crates/writercraft-app/src/main.rs`)**: Real-time 2D egui waveform curve displaying scene emotional valences $[-1.0, +1.0]$, tension spikes, Climax marker, and Dark Night of the Soul marker directly in Corkboard & Arcs.
+   - **Fleet Epistemic Harmonizer (`crates/writercraft-core/src/fleet_harmonizer.rs`)**: Audits cross-corpus alignment across the 5 fleet books (`on-metacraft`, `on-ai-takeover`, `on-hyperwar`, `on-hyperart`, `on-hypermind`), auditing the 6-Level Autonomy Ladder (Levels 0-5), clustering 100+ open `[construction]` claims into thematic clusters, and computing terminology consistency scores.
+   - **FastMCP Protocol Expansion (`crates/writercraft-mcp/src/main.rs`)**: 22 total tools including `writercraft_epistemic_validate`, `writercraft_idiolect_audit`, and `writercraft_fleet_harmonize`.
 
 ---
 
 ## Verification Commands
 
 ```powershell
-# Run all tests
+# Run all 16 tests
 cargo test --manifest-path writercraft/Cargo.toml
 
-# Smoke test
+# Headless smoke test (17 capabilities)
 ./target/release/writercraft.exe --smoke
 
-# Lint chapter
-./target/release/writercraft-cli.exe lint on-metacraft/chapters/01-the-breach.md
+# Epistemic Knowledge Matrix audit
+./target/release/writercraft-cli.exe epistemic
 
-# AI companion chapter draft
-./target/release/writercraft-cli.exe draft-next on-metacraft 01-the-breach.md --hint "focus on high voltage"
+# Dialogue Idiolect & Head-Hopping audit
+./target/release/writercraft-cli.exe idiolect path/to/script.fountain --pov "Elena"
 
-# Staged syndication
-./target/release/writercraft-cli.exe syndicate on-metacraft/chapters/01-the-breach.md --out-dir outbox
+# Fleet Epistemic Harmonization
+./target/release/writercraft-cli.exe fleet-harmonize
 ```
 
 ---

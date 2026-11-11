@@ -26,17 +26,21 @@
 
 ### 3. 📌 Fiction & Corkboard Studio
 - **Corkboard Scene Cards**: Formalized dramatically via POV character, dramatic goal, conflict obstacle, disaster outcome, and emotional valence $[-1.0, +1.0]$.
-- **Narrative Arc & Tension Analysis**: Algorithmic tension curve calculation and climax scene identification.
+- **Interactive Narrative Arc & Tension Waveform Painter (egui)**: Visual 2D curve displaying emotional valence $[-1.0, +1.0]$, tension spikes, Climax marker, and Dark Night of the Soul marker directly in Corkboard & Arcs.
+- **Epistemic Knowledge & Secret Matrix ("Who Knows What When")**: Tracks character knowledge states (`Ignorant`, `Suspected`, `Known`, `Misinformed`), secret leaks, dramatic irony, timeline reconciliation (Fabula vs. Syuzhet with flashback tagging), and detects epistemic plot holes (`PrematureKnowledgeLeak`, `ContradictoryBeliefAction`).
 - **High-Velocity Beat Sheet Generator**: Scaffolds 15-beat / multi-act outlines for Romance (KDP trope formulas: Enemies-to-Lovers, Fake Dating, Forced Proximity), Thrillers (The Ticking Clock, Red Herring), and Sci-Fi/Singularity.
 - **Curated TV Tropes Catalog**: Curated narrative mechanics index with typical emotional valence shifts.
 
-### 4. 🎬 Screenplay Studio (Fountain)
+### 4. 🎬 Screenplay Studio (Fountain) & Idiolect Profiler
 - **Fountain Screenplay Parser**: Industry-standard `.fountain` parser tracking scene headings, character dialogue cues, speaking turns, word count allocation, and page-a-minute run-time estimations.
+- **Character Idiolect & Voice Profiler**: Measures cadence variance, Type-Token Ratio (TTR), contraction ratios, distinctiveness scores, and overall voice divergence $[0.0, 1.0]$.
+- **POV Head-Hopping Detector**: Scans third-person limited prose manuscripts for non-POV characters performing internal cognitive verbs (*thought*, *felt*, *knew*, *wondered*, *realized*, *secretly wanted*, *believed in their heart*).
 
 ### 5. 🎓 Scholar & BibTeX Studio
 - **BibTeX Citation Indexer**: Parses standard BibTeX files, indexing cite keys, titles, authors, and publication venues.
 - **Claim Ledger Audit**: Scans manuscripts for `[construction: ...]` tags, reporting exact line numbers and unverified claims.
 - **Typst Academic Scaffolding**: Exports markdown chapters to compile-ready Typst (`.typ`) markup.
+- **Fleet Epistemic Harmonizer**: Audits cross-corpus alignment across the 5 fleet books (`on-metacraft`, `on-ai-takeover`, `on-hyperwar`, `on-hyperart`, `on-hypermind`), auditing the 6-Level Autonomy Ladder (Levels 0-5), clustering 100+ open `[construction]` claims into thematic clusters, and computing terminology consistency scores.
 
 ### 6. 📖 Craft Delectations & Trope Library (Generous Prose Reader)
 - **In-App Literary Essays**: Direct in-studio reader for deep treatises compiled directly into the application binary:
@@ -76,7 +80,7 @@ writercraft/
 ## Verification & Usage
 
 ```powershell
-# Run comprehensive test suite (11 tests)
+# Run comprehensive test suite (16 tests)
 cargo test --manifest-path writercraft/Cargo.toml
 
 # Headless smoke test
@@ -102,6 +106,11 @@ cargo test --manifest-path writercraft/Cargo.toml
 ./target/release/writercraft-cli.exe beats --genre romance --title "Tethered Hearts" --protagonist "Lady Genevieve"
 ./target/release/writercraft-cli.exe screenplay path/to/script.fountain
 ./target/release/writercraft-cli.exe bibtex path/to/references.bib
+
+# Tier 4: Epistemic Matrix, Idiolect Voice Profiler & Fleet Harmonizer
+./target/release/writercraft-cli.exe epistemic
+./target/release/writercraft-cli.exe idiolect path/to/script.fountain --pov "Elena"
+./target/release/writercraft-cli.exe fleet-harmonize
 ```
 
 ---
@@ -126,6 +135,9 @@ cargo test --manifest-path writercraft/Cargo.toml
 | `writercraft_companion_syndicate` | Draft companion Blogpost & HN note staged locally in `outbox/` |
 | `writercraft_calibre_libraries` | Auto-discover registered local Calibre libraries |
 | `writercraft_calibre_search` | Search books in Calibre library with zero database locks |
-| `writercraft_list_craft_essays` | List all 4 in-app literary essays and rhetorical treatises with metadata |
-| `writercraft_read_craft_essay` | Read full markdown text of a craft essay (dialectic, canon, tropes, publishing) |
+| `writercraft_list_craft_essays` | List all 5 in-app literary essays and rhetorical treatises with metadata |
+| `writercraft_read_craft_essay` | Read full markdown text of a craft essay (dialectic, canon, frontier, tropes, publishing) |
 | `writercraft_frankenstein_beats` | Generate satirical Frankenstein Smorgasbord beat sheet combining 4 genres |
+| `writercraft_epistemic_validate` | Validate epistemic knowledge matrix, detect secret leaks and plot holes |
+| `writercraft_idiolect_audit` | Profile character dialogue cadence, contractions, TTR, and head-hopping |
+| `writercraft_fleet_harmonize` | Audit 6-level autonomy ladder and cluster open claims across fleet books |
