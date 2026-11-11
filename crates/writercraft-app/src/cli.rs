@@ -110,6 +110,18 @@ enum Commands {
         /// Essay slug
         slug: String,
     },
+    /// Validate epistemic flow, facts, secrets, and detect plot holes
+    Epistemic,
+    /// Profile character idiolect distinctiveness, cadence, and head-hopping in a screenplay or text file
+    Idiolect {
+        /// Path to the script or text file
+        path: PathBuf,
+        /// Declared POV character (for head-hopping check)
+        #[arg(short, long, default_value = "Protagonist")]
+        pov: String,
+    },
+    /// Audit cross-book terminology and autonomy ladders across the 5 fleet books
+    FleetHarmonize,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -274,6 +286,64 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     std::process::exit(1);
                 }
             }
+        }
+        Commands::Epistemic => {
+            let graph = engine.mock_epistemic_graph();
+            let anomalies = engine.validate_epistemic_graph(&graph);
+            let timeline = graph.build_timeline();
+            let payload = serde_json::json!({
+                "facts": graph.facts,
+                "timeline_beats": timeline,
+                "anomalies_detected": anomalies.len(),
+                "anomalies": anomalies,
+            });
+            println!("{}", serde_json::to_string_pretty(&payload)?);
+        }
+        Commands::Idiolect { path, pov } => {
+            let content = fs::read_to_string(&path)?;
+            let mut turns: Vec<(String, String)> = Vec::new();
+            let mut cur_char: Option<String> = None;
+            let mut cur_speech = String::new();
+
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    if let Some(ch) = cur_char.take() {
+                        if !cur_speech.trim().is_empty() {
+                            turns.push((ch, cur_speech.trim().to_string()));
+                            cur_speech.clear();
+                        }
+                    }
+                    continue;
+                }
+                if trimmed.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c == '(' || c == ')' || c == '.') && !trimmed.starts_with("EXT.") && !trimmed.starts_with("INT.") {
+                    if let Some(ch) = cur_char.take() {
+                        if !cur_speech.trim().is_empty() {
+                            turns.push((ch, cur_speech.trim().to_string()));
+                            cur_speech.clear();
+                        }
+                    }
+                    let clean = trimmed.split('(').next().unwrap_or(trimmed).trim().to_string();
+                    cur_char = Some(clean);
+                } else if cur_char.is_some() && !trimmed.starts_with('(') {
+                    cur_speech.push(' ');
+                    cur_speech.push_str(trimmed);
+                }
+            }
+            if let Some(ch) = cur_char {
+                if !cur_speech.trim().is_empty() {
+                    turns.push((ch, cur_speech.trim().to_string()));
+                }
+            }
+
+            let mut report = engine.audit_dialogue_turns(&turns);
+            let other_chars: Vec<&str> = report.character_profiles.iter().map(|p| p.character.as_str()).collect();
+            report.head_hopping_alerts = engine.scan_pov_head_hopping(&content, &pov, &other_chars);
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        Commands::FleetHarmonize => {
+            let report = engine.harmonize_fleet_corpus(repos_dir);
+            println!("{}", serde_json::to_string_pretty(&report)?);
         }
     }
     Ok(())

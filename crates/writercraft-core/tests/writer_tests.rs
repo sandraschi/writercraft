@@ -304,3 +304,94 @@ fn test_frankenstein_beat_sheet() {
     assert!(titles.iter().any(|t| t.contains("00:01")));
     assert!(titles.iter().any(|t| t.contains("Scottish Moor")));
 }
+
+#[test]
+fn test_epistemic_knowledge_matrix() {
+    let engine = WriterEngine::new();
+    let mut graph = engine.mock_epistemic_graph();
+
+    // 1. Initial valid mock graph has no action anomalies
+    let anomalies = engine.validate_epistemic_graph(&graph);
+    let leaks: Vec<_> = anomalies.iter().filter(|a| a.issue_type == "PrematureKnowledgeLeak").collect();
+    assert!(leaks.is_empty(), "Valid mock graph must have zero premature knowledge leaks");
+
+    // 2. Timeline Flashback detection
+    let timeline = graph.build_timeline();
+    assert_eq!(timeline.len(), 3);
+    assert_eq!(timeline[0].scene_id, "SCENE-01");
+    assert_eq!(timeline[1].scene_id, "SCENE-02");
+    assert_eq!(timeline[2].scene_id, "SCENE-03");
+    assert!(timeline[2].is_flashback, "SCENE-03 (fabula 80 after scene 104) must be tagged as a flashback");
+
+    // 3. Deliberately inject a plot-hole: Elena Vance acts in Scene 4 on a secret she does not know
+    graph.add_scene_event(writercraft_core::epistemic_matrix::SceneEpistemicEvent {
+        scene_id: "SCENE-04".into(),
+        syuzhet_order: 4,
+        fabula_time: 110,
+        pov_character: "Dr. Elena Vance".into(),
+        present_characters: vec!["Dr. Elena Vance".into()],
+        revealed_facts: vec![],
+        planted_lies: vec![],
+        action_dependencies: vec!["FACT-03-NANITES".into()], // Elena was never told about nanites!
+    });
+
+    let new_anomalies = engine.validate_epistemic_graph(&graph);
+    let leak_found = new_anomalies.iter().any(|a| {
+        a.character == "Dr. Elena Vance" && a.fact_id == "FACT-03-NANITES" && a.issue_type == "PrematureKnowledgeLeak"
+    });
+    assert!(leak_found, "Must detect PrematureKnowledgeLeak for Dr. Elena Vance in SCENE-04");
+}
+
+#[test]
+fn test_character_idiolect_analysis() {
+    let engine = WriterEngine::new();
+
+    let turns = vec![
+        ("DR. VANCE".to_string(), "The mathematical resonance parameters demonstrate an irreversible bifurcation in the neural baseline. We must proceed with analytical rigor.".to_string()),
+        ("DR. VANCE".to_string(), "Observe the harmonic oscillation across the telemetry registers. There is no plausible alternative hypothesis.".to_string()),
+        ("MARCUS".to_string(), "Don't do it! I can't let you trigger this. Won't you see that they're coming for us? It's over!".to_string()),
+        ("MARCUS".to_string(), "I'm telling you, we're done for. Pull the plug now!".to_string()),
+    ];
+
+    let report = engine.audit_dialogue_turns(&turns);
+    assert_eq!(report.character_profiles.len(), 2);
+
+    let vance = report.character_profiles.iter().find(|p| p.character == "DR. VANCE").unwrap();
+    let marcus = report.character_profiles.iter().find(|p| p.character == "MARCUS").unwrap();
+
+    // Vance has 0% contractions (formal academic)
+    assert_eq!(vance.contraction_ratio, 0.0);
+    // Marcus uses contractions ("don't", "can't", "won't", "it's", "i'm", "we're")
+    assert!(marcus.contraction_ratio > 0.15);
+
+    // High voice divergence between academic formal and colloquial urgent
+    assert!(report.overall_voice_divergence > 0.4);
+
+    // Test head-hopping detection in third-person narrative
+    let prose_text = r#"Elena adjusted the frequency dial, watching the oscilloscope spike.
+Across the console, Marcus Thorne smiled calmly, but secretly wanted to sabotage the trunk line.
+He believed in his heart that the project would destroy everything."#;
+
+    let leaks = engine.scan_pov_head_hopping(prose_text, "Elena", &["Elena", "Marcus Thorne"]);
+    assert_eq!(leaks.len(), 2, "Must detect two head-hopping leaks for Marcus Thorne ('secretly wanted', 'believed in his heart')");
+    assert_eq!(leaks[0].intruding_character, "Marcus Thorne");
+    assert_eq!(leaks[0].cognitive_verb, "secretly wanted");
+}
+
+#[test]
+fn test_fleet_harmonizer() {
+    let engine = WriterEngine::new();
+    let repos_dir = if Path::new("on-metacraft").exists() {
+        Path::new(".")
+    } else {
+        Path::new("..")
+    };
+
+    let report = engine.harmonize_fleet_corpus(repos_dir);
+    assert_eq!(report.autonomy_ladder.len(), 6, "Must define all 6 autonomy ladder rungs (Level 0 to 5)");
+    assert_eq!(report.autonomy_ladder[0].level, 0);
+    assert_eq!(report.autonomy_ladder[5].level, 5);
+
+    assert!(report.terminology_consistency_score >= 0.85);
+    assert!(report.total_books >= 1, "Must detect at least 1 fleet book when run from workspace");
+}

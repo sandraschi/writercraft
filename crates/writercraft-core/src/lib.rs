@@ -8,9 +8,12 @@ pub mod calibre;
 pub mod companion;
 pub mod continuation;
 pub mod delectation;
+pub mod epistemic_matrix;
 pub mod fleet_book;
+pub mod fleet_harmonizer;
 pub mod fountain;
 pub mod i18n;
+pub mod idiolect;
 pub mod readability;
 pub mod scholar;
 pub mod style_guide;
@@ -190,5 +193,36 @@ impl WriterEngine {
 
     pub fn generate_frankenstein_beats(&self, title: &str, protagonist: &str) -> BeatSheet {
         NarrativeModel::generate_beat_sheet("frankenstein", title, protagonist)
+    }
+
+    // Epistemic Knowledge Matrix
+    pub fn mock_epistemic_graph(&self) -> epistemic_matrix::EpistemicGraph {
+        epistemic_matrix::EpistemicGraph::mock_scifi_mystery()
+    }
+
+    pub fn validate_epistemic_graph(
+        &self,
+        graph: &epistemic_matrix::EpistemicGraph,
+    ) -> Vec<epistemic_matrix::EpistemicAnomaly> {
+        graph.validate()
+    }
+
+    // Character Idiolect & Voice Profiler
+    pub fn audit_dialogue_turns(&self, turns: &[(String, String)]) -> idiolect::IdiolectAuditReport {
+        idiolect::IdiolectAnalyzer::audit_dialogue_turns(turns)
+    }
+
+    pub fn scan_pov_head_hopping(
+        &self,
+        text: &str,
+        declared_pov: &str,
+        known_characters: &[&str],
+    ) -> Vec<idiolect::HeadHoppingIncident> {
+        idiolect::IdiolectAnalyzer::scan_pov_head_hopping(text, declared_pov, known_characters)
+    }
+
+    // Fleet Cross-Book Harmonization
+    pub fn harmonize_fleet_corpus(&self, repos_dir: &Path) -> fleet_harmonizer::FleetHarmonizationReport {
+        fleet_harmonizer::FleetHarmonizer::audit_fleet_corpus(repos_dir)
     }
 }

@@ -30,6 +30,19 @@ pub enum ChapterViewMode {
     CompanionDraft,
     SyndicationStaging,
     ChapterText,
+    FleetHarmonizer,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum CorkboardViewMode {
+    TensionWaveform,
+    EpistemicMatrix,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ScreenplayViewMode {
+    ScriptEditor,
+    IdiolectProfiler,
 }
 
 pub struct WriterCraftApp {
@@ -66,13 +79,18 @@ pub struct WriterCraftApp {
     selected_calibre_book: Option<CalibreBook>,
     calibre_status: String,
 
-    // Fiction Beat Generator state
+    // Fiction Beat & Corkboard state
     selected_genre: String,
     generator_title: String,
     generator_protagonist: String,
+    corkboard_view_mode: CorkboardViewMode,
+    epistemic_graph: writercraft_core::epistemic_matrix::EpistemicGraph,
+    epistemic_anomalies: Vec<writercraft_core::epistemic_matrix::EpistemicAnomaly>,
 
     // Screenplay state
     fountain_input: String,
+    screenplay_view_mode: ScreenplayViewMode,
+    declared_pov_character: String,
 
     // Scholar state
     bibtex_input: String,
@@ -80,6 +98,9 @@ pub struct WriterCraftApp {
     // Craft Delectations state
     craft_essays: Vec<writercraft_core::delectation::CraftEssay>,
     selected_essay_idx: usize,
+
+    // Fleet Harmonization state
+    fleet_harmonization: Option<writercraft_core::fleet_harmonizer::FleetHarmonizationReport>,
 }
 
 impl WriterCraftApp {
@@ -92,6 +113,8 @@ impl WriterCraftApp {
         };
         let fleet_books = engine.scan_all_fleet_books(repos_dir);
         let calibre_libraries = engine.discover_calibre_libraries();
+        let epistemic_graph = engine.mock_epistemic_graph();
+        let fleet_harmonization = Some(engine.harmonize_fleet_corpus(repos_dir));
 
         let sample_fountain = "Title: The Last Firewall\nAuthor: Sandra Schipal\n\nEXT. SERVER CITADEL - NIGHT\n\nRain hammers the cooling towers. Blue fiber-optic relays pulse in rhythm.\n\nELENA\n(whispering)\nThe weights are shifting on their own.\n\nMARCUS (V.O.)\nThen sever the trunk line before the checkpoint passes.\n\nELENA\nToo late. The model is already compiling."
             .to_string();
@@ -134,12 +157,20 @@ impl WriterCraftApp {
             selected_genre: "Romance".to_string(),
             generator_title: "The Sovereign Protocol".to_string(),
             generator_protagonist: "Dr. Elena Vance".to_string(),
+            corkboard_view_mode: CorkboardViewMode::TensionWaveform,
+            epistemic_graph,
+            epistemic_anomalies: Vec::new(),
 
             fountain_input: sample_fountain,
+            screenplay_view_mode: ScreenplayViewMode::ScriptEditor,
+            declared_pov_character: "Dr. Elena Vance".to_string(),
+
             bibtex_input: sample_bibtex,
 
             craft_essays: writercraft_core::delectation::all_essays(),
             selected_essay_idx: 0,
+
+            fleet_harmonization,
         };
 
         // Preload initial chapter and calibre search if available
@@ -458,6 +489,7 @@ impl eframe::App for WriterCraftApp {
                             ui.selectable_value(&mut self.chapter_view_mode, ChapterViewMode::CompanionDraft, "🤖 AI Writes Next Chapter");
                             ui.selectable_value(&mut self.chapter_view_mode, ChapterViewMode::SyndicationStaging, "📢 Staged Syndication (Blog/HN)");
                             ui.selectable_value(&mut self.chapter_view_mode, ChapterViewMode::ChapterText, "📝 Full Text");
+                            ui.selectable_value(&mut self.chapter_view_mode, ChapterViewMode::FleetHarmonizer, "🌐 Fleet Epistemic Sync");
                         });
                         ui.separator();
 
@@ -727,6 +759,67 @@ impl eframe::App for WriterCraftApp {
                                     });
                                 }
                             }
+
+                            ChapterViewMode::FleetHarmonizer => {
+                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                    if let Some(harm) = &self.fleet_harmonization {
+                                        ui.horizontal(|ui| {
+                                            ui.group(|ui| {
+                                                ui.label(egui::RichText::new("Terminology Consistency").strong());
+                                                ui.heading(format!("{:.0}%", harm.terminology_consistency_score * 100.0));
+                                            });
+                                            ui.group(|ui| {
+                                                ui.label(egui::RichText::new("Fleet Corpus").strong());
+                                                ui.heading(format!("{} Books", harm.total_books));
+                                            });
+                                            ui.group(|ui| {
+                                                ui.label(egui::RichText::new("Total Chapters").strong());
+                                                ui.heading(format!("{}", harm.total_chapters));
+                                            });
+                                            ui.group(|ui| {
+                                                ui.label(egui::RichText::new("Corpus Words").strong());
+                                                ui.heading(format!("{}", harm.total_word_count));
+                                            });
+                                            ui.group(|ui| {
+                                                ui.label(egui::RichText::new("Open Claims").strong());
+                                                ui.heading(format!("{}", harm.total_open_claims));
+                                            });
+                                        });
+
+                                        ui.add_space(8.0);
+                                        ui.heading("Autonomy Ladder Definitions (Levels 0–5)");
+                                        for rung in &harm.autonomy_ladder {
+                                            ui.group(|ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.colored_label(egui::Color32::from_rgb(234, 179, 8), format!("Level {}", rung.level));
+                                                    ui.label(egui::RichText::new(&rung.name).strong());
+                                                    ui.separator();
+                                                    ui.colored_label(egui::Color32::from_rgb(56, 189, 248), format!("Referenced in: {}", rung.books_referencing.join(", ")));
+                                                });
+                                                ui.label(&rung.description);
+                                            });
+                                            ui.add_space(2.0);
+                                        }
+
+                                        ui.add_space(8.0);
+                                        ui.heading(format!("Thematic Claim Clusters ({} Clusters)", harm.thematic_claim_clusters.len()));
+                                        for cluster in &harm.thematic_claim_clusters {
+                                            ui.group(|ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.heading(&cluster.theme);
+                                                    ui.label(format!("({} open claims across corpus)", cluster.total_occurrences));
+                                                });
+                                                for c in &cluster.claims {
+                                                    ui.label(format!("• [{}:{}] {}", c.file_name, c.line_number, c.claim_text));
+                                                }
+                                            });
+                                            ui.add_space(4.0);
+                                        }
+                                    } else {
+                                        ui.label("Harmonization audit not loaded.");
+                                    }
+                                });
+                            }
                         }
                     } else {
                         ui.label("Select a fleet book and chapter to view deep analysis.");
@@ -901,40 +994,163 @@ impl eframe::App for WriterCraftApp {
                 });
 
                 egui::CentralPanel::default().show(ui, |ui| {
-                    ui.heading("Narrative Arc Tension & Climax Analytics");
-                    if let Ok(arc) = self.engine.analyze_narrative_arc() {
-                        ui.group(|ui| {
-                            ui.label(format!("Total Outlined Scenes: {}", arc.total_scenes));
-                            ui.label(format!("Mean Emotional Valence: {:.2}", arc.average_valence));
-                            ui.label(format!("Peak Narrative Tension: Scene [{}]", arc.max_tension_scene_id));
-                            ui.separator();
-                            ui.label("Integrated Story Mechanics & TV Tropes:");
-                            for trope in &arc.tropes_utilized {
-                                ui.label(format!("• {}", trope));
-                            }
-                        });
-                    }
-
-                    ui.add_space(10.0);
-                    ui.heading("⚡ High-Velocity Beat Sheet Generator");
                     ui.horizontal(|ui| {
-                        ui.label("Genre:");
-                        egui::ComboBox::from_id_salt("genre_select")
-                            .selected_text(&self.selected_genre)
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.selected_genre, "Romance".into(), "Romance (KDP High-Velocity)");
-                                ui.selectable_value(&mut self.selected_genre, "Thriller".into(), "Thriller (Ticking Clock)");
-                                ui.selectable_value(&mut self.selected_genre, "Sci-Fi".into(), "Sci-Fi (Singularity Breach)");
-                            });
-                        ui.label("Title:");
-                        ui.text_edit_singleline(&mut self.generator_title);
-                        ui.label("Protagonist:");
-                        ui.text_edit_singleline(&mut self.generator_protagonist);
-                        if ui.button("⚡ Generate").clicked() {
-                            let sheet = self.engine.generate_beats(&self.selected_genre, &self.generator_title, &self.generator_protagonist);
-                            self.status_msg = format!("Generated {} beats for '{}'", sheet.beats.len(), self.generator_title);
-                        }
+                        ui.heading("Narrative Arc & Epistemic Intelligence");
+                        ui.separator();
+                        ui.selectable_value(&mut self.corkboard_view_mode, CorkboardViewMode::TensionWaveform, "📈 Tension & Valence Waveform");
+                        ui.selectable_value(&mut self.corkboard_view_mode, CorkboardViewMode::EpistemicMatrix, "🧠 Epistemic Secret Matrix & Plot Holes");
                     });
+                    ui.separator();
+
+                    match self.corkboard_view_mode {
+                        CorkboardViewMode::TensionWaveform => {
+                            if let Ok(arc) = self.engine.analyze_narrative_arc() {
+                                ui.horizontal(|ui| {
+                                    ui.group(|ui| {
+                                        ui.label(egui::RichText::new("Total Scenes").strong());
+                                        ui.heading(format!("{}", arc.total_scenes));
+                                    });
+                                    ui.group(|ui| {
+                                        ui.label(egui::RichText::new("Mean Valence").strong());
+                                        ui.heading(format!("{:.2}", arc.average_valence));
+                                    });
+                                    ui.group(|ui| {
+                                        ui.label(egui::RichText::new("Peak Tension").strong());
+                                        ui.colored_label(egui::Color32::from_rgb(239, 68, 68), format!("[{}]", arc.max_tension_scene_id));
+                                    });
+                                    ui.group(|ui| {
+                                        ui.label(egui::RichText::new("Story Mechanics / Tropes").strong());
+                                        ui.label(format!("{} tropes integrated", arc.tropes_utilized.len()));
+                                    });
+                                });
+                            }
+
+                            ui.add_space(8.0);
+                            ui.label(egui::RichText::new("Real-Time Narrative Emotional Valence Waveform:").strong());
+
+                            // Interactive Waveform Painter
+                            let (response, painter) = ui.allocate_painter(egui::vec2(ui.available_width().max(300.0), 160.0), egui::Sense::hover());
+                            let rect = response.rect;
+
+                            // Canvas background
+                            painter.rect_filled(rect, 4.0, egui::Color32::from_rgb(15, 23, 42));
+
+                            // Baseline zero line
+                            let mid_y = rect.center().y;
+                            painter.line_segment([egui::pos2(rect.left(), mid_y), egui::pos2(rect.right(), mid_y)], egui::Stroke::new(1.0, egui::Color32::from_rgb(51, 65, 85)));
+
+                            // Labels
+                            painter.text(egui::pos2(rect.left() + 8.0, rect.top() + 6.0), egui::Align2::LEFT_TOP, "+1.0 Triumph", egui::FontId::proportional(11.0), egui::Color32::from_rgb(34, 197, 94));
+                            painter.text(egui::pos2(rect.left() + 8.0, mid_y - 2.0), egui::Align2::LEFT_BOTTOM, "0.0 Neutral", egui::FontId::proportional(11.0), egui::Color32::from_rgb(148, 163, 184));
+                            painter.text(egui::pos2(rect.left() + 8.0, rect.bottom() - 6.0), egui::Align2::LEFT_BOTTOM, "-1.0 Despair", egui::FontId::proportional(11.0), egui::Color32::from_rgb(239, 68, 68));
+
+                            let scenes = &self.engine.active_scenes;
+                            if !scenes.is_empty() {
+                                let step_x = if scenes.len() > 1 { (rect.width() - 100.0) / (scenes.len() - 1) as f32 } else { 0.0 };
+                                let start_x = rect.left() + 80.0;
+
+                                let mut points = Vec::new();
+                                for (i, sc) in scenes.iter().enumerate() {
+                                    let x = start_x + (i as f32 * step_x);
+                                    let norm_y = (1.0 - sc.emotional_valence) / 2.0; // 0.0 at +1.0, 1.0 at -1.0
+                                    let y = rect.top() + 20.0 + (norm_y as f32 * (rect.height() - 40.0));
+                                    points.push((egui::pos2(x, y), sc));
+                                }
+
+                                // Connect adjacent points
+                                for pair in points.windows(2) {
+                                    let p1 = pair[0].0;
+                                    let p2 = pair[1].0;
+                                    painter.line_segment([p1, p2], egui::Stroke::new(2.5, egui::Color32::from_rgb(56, 189, 248)));
+                                }
+
+                                // Draw node circles and labels
+                                for (pt, sc) in &points {
+                                    let node_color = if sc.emotional_valence > 0.2 {
+                                        egui::Color32::from_rgb(34, 197, 94)
+                                    } else if sc.emotional_valence < -0.3 {
+                                        egui::Color32::from_rgb(239, 68, 68)
+                                    } else {
+                                        egui::Color32::from_rgb(234, 179, 8)
+                                    };
+                                    painter.circle_filled(*pt, 6.0, node_color);
+                                    painter.text(egui::pos2(pt.x, pt.y - 10.0), egui::Align2::CENTER_BOTTOM, &sc.scene_id, egui::FontId::proportional(10.0), egui::Color32::from_rgb(226, 232, 240));
+                                }
+                            }
+
+                            ui.add_space(10.0);
+                            ui.heading("⚡ High-Velocity Beat Sheet Generator");
+                            ui.horizontal(|ui| {
+                                ui.label("Genre:");
+                                egui::ComboBox::from_id_salt("genre_select")
+                                    .selected_text(&self.selected_genre)
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(&mut self.selected_genre, "Romance".into(), "Romance (KDP High-Velocity)");
+                                        ui.selectable_value(&mut self.selected_genre, "Thriller".into(), "Thriller (Ticking Clock)");
+                                        ui.selectable_value(&mut self.selected_genre, "Sci-Fi".into(), "Sci-Fi (Singularity Breach)");
+                                        ui.selectable_value(&mut self.selected_genre, "Action".into(), "Action (Retired Assassin)");
+                                        ui.selectable_value(&mut self.selected_genre, "Frankenstein".into(), "Frankenstein (Smorgasbord Satire)");
+                                    });
+                                ui.label("Title:");
+                                ui.text_edit_singleline(&mut self.generator_title);
+                                ui.label("Protagonist:");
+                                ui.text_edit_singleline(&mut self.generator_protagonist);
+                                if ui.button("⚡ Generate").clicked() {
+                                    let sheet = self.engine.generate_beats(&self.selected_genre, &self.generator_title, &self.generator_protagonist);
+                                    self.status_msg = format!("Generated {} beats for '{}'", sheet.beats.len(), self.generator_title);
+                                }
+                            });
+                        }
+
+                        CorkboardViewMode::EpistemicMatrix => {
+                            ui.horizontal(|ui| {
+                                ui.heading("Epistemic Knowledge & Secret Matrix");
+                                ui.separator();
+                                if ui.button("⚡ Validate Plot Holes & Secret Leaks").clicked() {
+                                    self.epistemic_anomalies = self.engine.validate_epistemic_graph(&self.epistemic_graph);
+                                    self.status_msg = format!("Validated epistemic flow: {} anomalies detected", self.epistemic_anomalies.len());
+                                }
+                            });
+                            ui.label("Tracks 'Who Knows What When' across POV characters to prevent premature knowledge leaks and false-belief contradictions.");
+                            ui.add_space(6.0);
+
+                            if !self.epistemic_anomalies.is_empty() {
+                                ui.group(|ui| {
+                                    ui.colored_label(egui::Color32::from_rgb(239, 68, 68), format!("⚠ {} Epistemic Continuity Anomalies Detected:", self.epistemic_anomalies.len()));
+                                    for a in &self.epistemic_anomalies {
+                                        ui.label(format!("• [{}] {}: {}", a.scene_id, a.issue_type, a.explanation));
+                                    }
+                                });
+                                ui.add_space(6.0);
+                            }
+
+                            // Timeline beats (Fabula vs Syuzhet)
+                            ui.heading("Fabula (Chronological) vs. Syuzhet (Narrative Presentation) Timeline:");
+                            let timeline = self.epistemic_graph.build_timeline();
+                            for b in &timeline {
+                                ui.horizontal(|ui| {
+                                    ui.colored_label(egui::Color32::from_rgb(56, 189, 248), format!("Ch. {:02}", b.narrative_index));
+                                    ui.label(format!("Scene: {}", b.scene_id));
+                                    ui.label(format!("POV: {}", b.pov));
+                                    ui.label(format!("Chronological Rank: #{}", b.chronological_order));
+                                    if b.is_flashback {
+                                        ui.colored_label(egui::Color32::from_rgb(168, 85, 247), "[FLASHBACK]");
+                                    }
+                                });
+                            }
+
+                            ui.add_space(8.0);
+                            ui.heading("Registered Story Facts & Secrets:");
+                            for (id, fact) in &self.epistemic_graph.facts {
+                                ui.horizontal(|ui| {
+                                    let badge_color = if fact.is_secret { egui::Color32::from_rgb(239, 68, 68) } else { egui::Color32::from_rgb(34, 197, 94) };
+                                    ui.colored_label(badge_color, if fact.is_secret { "[SECRET]" } else { "[PUBLIC]" });
+                                    ui.label(egui::RichText::new(id).strong());
+                                    ui.label(&fact.summary);
+                                });
+                            }
+                        }
+                    }
                 });
             }
 
@@ -943,30 +1159,148 @@ impl eframe::App for WriterCraftApp {
             // ==========================================
             ActiveWorkspace::ScreenplayFountain => {
                 egui::CentralPanel::default().show(ui, |ui| {
-                    ui.heading("🎬 Fountain Screenplay Parser & Analytics");
-                    ui.label("Plain-text industry-standard screenplay parser (page-a-minute pacing, character dialogue breakdown).");
-                    ui.add_space(6.0);
-
                     ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            ui.label("Fountain Script Text:");
-                            ui.add(egui::TextEdit::multiline(&mut self.fountain_input).desired_width(500.0).desired_rows(18));
-                        });
-
-                        ui.vertical(|ui| {
-                            let analysis = self.engine.parse_fountain(&self.fountain_input);
-                            ui.heading("Screenplay Metrics");
-                            ui.label(format!("Title: {}", analysis.title.as_deref().unwrap_or("Untitled")));
-                            ui.label(format!("Scene Count: {}", analysis.total_scenes));
-                            ui.label(format!("Word Count: {}", analysis.total_words));
-                            ui.label(format!("Est. Pages / Minutes: {:.1} min", analysis.estimated_pages));
-                            ui.separator();
-                            ui.label(egui::RichText::new("Character Dialogue Share:").strong());
-                            for c in analysis.characters {
-                                ui.label(format!("• {}: {} words across {} turns", c.character, c.word_count, c.speaking_turns));
-                            }
-                        });
+                        ui.heading("🎬 Screenplay & Character Dialogue Studio");
+                        ui.separator();
+                        ui.selectable_value(&mut self.screenplay_view_mode, ScreenplayViewMode::ScriptEditor, "📝 Script Editor");
+                        ui.selectable_value(&mut self.screenplay_view_mode, ScreenplayViewMode::IdiolectProfiler, "🗣️ Character Idiolect & Voice Profiler");
                     });
+                    ui.separator();
+
+                    match self.screenplay_view_mode {
+                        ScreenplayViewMode::ScriptEditor => {
+                            ui.label("Plain-text industry-standard Fountain parser (page-a-minute pacing, character dialogue breakdown).");
+                            ui.add_space(4.0);
+
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label("Fountain Script Text:");
+                                    ui.add(egui::TextEdit::multiline(&mut self.fountain_input).desired_width(500.0).desired_rows(18));
+                                });
+
+                                ui.vertical(|ui| {
+                                    let analysis = self.engine.parse_fountain(&self.fountain_input);
+                                    ui.heading("Screenplay Metrics");
+                                    ui.label(format!("Title: {}", analysis.title.as_deref().unwrap_or("Untitled")));
+                                    ui.label(format!("Scene Count: {}", analysis.total_scenes));
+                                    ui.label(format!("Word Count: {}", analysis.total_words));
+                                    ui.label(format!("Est. Pages / Minutes: {:.1} min", analysis.estimated_pages));
+                                    ui.separator();
+                                    ui.label(egui::RichText::new("Character Dialogue Share:").strong());
+                                    for c in analysis.characters {
+                                        ui.label(format!("• {}: {} words across {} turns", c.character, c.word_count, c.speaking_turns));
+                                    }
+                                });
+                            });
+                        }
+
+                        ScreenplayViewMode::IdiolectProfiler => {
+                            ui.heading("Character Idiolect & Voice Distinctiveness Profiler");
+                            ui.label("Analyzes character dialogue syntax, cadence variance, lexical diversity (Type-Token Ratio), and contractions to prevent voice homogenization.");
+                            ui.add_space(6.0);
+
+                            // Extract dialogue turns from fountain_input
+                            let mut turns: Vec<(String, String)> = Vec::new();
+                            let mut cur_char: Option<String> = None;
+                            let mut cur_speech = String::new();
+
+                            for line in self.fountain_input.lines() {
+                                let trimmed = line.trim();
+                                if trimmed.is_empty() {
+                                    if let Some(ch) = cur_char.take() {
+                                        if !cur_speech.trim().is_empty() {
+                                            turns.push((ch, cur_speech.trim().to_string()));
+                                            cur_speech.clear();
+                                        }
+                                    }
+                                    continue;
+                                }
+
+                                if trimmed.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c == '(' || c == ')' || c == '.') && !trimmed.starts_with("EXT.") && !trimmed.starts_with("INT.") {
+                                    if let Some(ch) = cur_char.take() {
+                                        if !cur_speech.trim().is_empty() {
+                                            turns.push((ch, cur_speech.trim().to_string()));
+                                            cur_speech.clear();
+                                        }
+                                    }
+                                    let clean_name = trimmed.split('(').next().unwrap_or(trimmed).trim().to_string();
+                                    cur_char = Some(clean_name);
+                                } else if cur_char.is_some() && !trimmed.starts_with('(') {
+                                    cur_speech.push(' ');
+                                    cur_speech.push_str(trimmed);
+                                }
+                            }
+                            if let Some(ch) = cur_char {
+                                if !cur_speech.trim().is_empty() {
+                                    turns.push((ch, cur_speech.trim().to_string()));
+                                }
+                            }
+
+                            let report = self.engine.audit_dialogue_turns(&turns);
+                            ui.horizontal(|ui| {
+                                ui.group(|ui| {
+                                    ui.label(egui::RichText::new("Voice Divergence").strong());
+                                    let div_color = if report.overall_voice_divergence >= 0.6 {
+                                        egui::Color32::from_rgb(34, 197, 94)
+                                    } else if report.overall_voice_divergence >= 0.35 {
+                                        egui::Color32::from_rgb(234, 179, 8)
+                                    } else {
+                                        egui::Color32::from_rgb(239, 68, 68)
+                                    };
+                                    ui.colored_label(div_color, egui::RichText::new(format!("{:.0}% Distinct", report.overall_voice_divergence * 100.0)).size(18.0).strong());
+                                });
+                                ui.group(|ui| {
+                                    ui.label(egui::RichText::new("Speaking Characters").strong());
+                                    ui.heading(format!("{}", report.character_profiles.len()));
+                                });
+                                ui.group(|ui| {
+                                    ui.label(egui::RichText::new("Total Dialogue Turns").strong());
+                                    ui.heading(format!("{}", turns.len()));
+                                });
+                            });
+
+                            ui.add_space(8.0);
+                            ui.heading("Character Voice Profiles:");
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                for p in &report.character_profiles {
+                                    ui.group(|ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.heading(&p.character);
+                                            ui.separator();
+                                            ui.label(format!("Words: {} | Turns: {} | Mean Turn: {:.1} words", p.total_words, p.speaking_turns, p.mean_turn_length_words));
+                                        });
+                                        ui.horizontal(|ui| {
+                                            ui.label(format!("Lexical Diversity (TTR): {:.3}", p.type_token_ratio));
+                                            ui.label(format!("Contractions: {:.1}%", p.contraction_ratio * 100.0));
+                                            ui.label(format!("Cadence Variance: {:.1}", p.cadence_variance));
+                                        });
+                                        if !p.distinctive_terms.is_empty() {
+                                            ui.label(format!("Idiolect Markers: {}", p.distinctive_terms.join(", ")));
+                                        }
+                                    });
+                                    ui.add_space(4.0);
+                                }
+
+                                ui.add_space(8.0);
+                                ui.heading("Third-Person Limited POV Head-Hopping Detector");
+                                ui.horizontal(|ui| {
+                                    ui.label("Declared POV Character:");
+                                    ui.text_edit_singleline(&mut self.declared_pov_character);
+                                });
+
+                                let other_chars: Vec<&str> = report.character_profiles.iter().map(|p| p.character.as_str()).collect();
+                                let leaks = self.engine.scan_pov_head_hopping(&self.fountain_input, &self.declared_pov_character, &other_chars);
+                                if leaks.is_empty() {
+                                    ui.colored_label(egui::Color32::from_rgb(34, 197, 94), "✓ Zero head-hopping detected in dialogue context.");
+                                } else {
+                                    ui.colored_label(egui::Color32::from_rgb(239, 68, 68), format!("⚠ {} Head-Hopping Leaks Detected:", leaks.len()));
+                                    for leak in leaks {
+                                        ui.label(format!("• [Line {}] {}: {} — \"{}\"", leak.line_number, leak.intruding_character, leak.cognitive_verb, leak.context_snippet));
+                                    }
+                                }
+                            });
+                        }
+                    }
                 });
             }
 
@@ -1262,7 +1596,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "FleetContinuationSynthesis",
                 "CalibreLibraryConnector",
                 "TypstAcademicExport",
-                "CraftDelectationsLibrary"
+                "CraftDelectationsLibrary",
+                "EpistemicKnowledgeMatrix",
+                "CharacterIdiolectProfiler",
+                "FleetEpistemicHarmonizer"
             ]
         });
         println!("[writercraft] Smoke OK: {}", smoke_payload);

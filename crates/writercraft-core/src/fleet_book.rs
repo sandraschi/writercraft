@@ -109,6 +109,12 @@ impl FleetBookAuditor {
         if repos_dir != Path::new("..") {
             check_dirs.push(Path::new("..").to_path_buf());
         }
+        if repos_dir != Path::new("../..") {
+            check_dirs.push(Path::new("../..").to_path_buf());
+        }
+        if repos_dir != Path::new("../../..") {
+            check_dirs.push(Path::new("../../..").to_path_buf());
+        }
 
         for base in check_dirs {
             let mut found = Vec::new();

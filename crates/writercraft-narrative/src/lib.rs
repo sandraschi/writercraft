@@ -19,6 +19,15 @@ pub struct SceneCard {
     pub associated_tropes: Vec<String>,
 }
 
+impl SceneCard {
+    /// Computes dramatic tension rating in range [0.0, 1.0]
+    pub fn tension_rating(&self) -> f64 {
+        let base_tension = 0.5 - (self.emotional_valence * 0.35);
+        let act_escalation = (self.act_number.saturating_sub(1) as f64) * 0.12;
+        (base_tension + act_escalation).clamp(0.0, 1.0)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EpistemicReference {
     pub citation_key: String,
