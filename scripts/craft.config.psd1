@@ -11,8 +11,10 @@
     CliPackage  = 'writercraft-app'
     CliBin      = 'writercraft-cli'
     CliSmoke    = @('--help')
-    McpArgs     = @()
-    McpSmoke    = @()
+    McpPackage  = 'writercraft-mcp'
+    McpBin      = 'writercraft-mcp'
+    McpArgs     = @('mcp')
+    McpSmoke    = @('mcp')
     Installer   = $true
-    Mcpb        = $false
+    Mcpb        = $true
 }
