@@ -54,7 +54,9 @@ pub struct WriterCraftApp {
     auth_username: String,
     auth_password_input: String,
     show_auth_modal: bool,
-    show_about_dialog: bool,
+    dialog: HelpDialog,
+    palette_query: String,
+    export_body: String,
     active_workspace: ActiveWorkspace,
 
     // Fleet Books Studio state
@@ -131,7 +133,9 @@ impl WriterCraftApp {
             auth_username: "author".to_string(),
             auth_password_input: String::new(),
             show_auth_modal: false,
-            show_about_dialog: false,
+            dialog: HelpDialog::None,
+            palette_query: String::new(),
+            export_body: String::new(),
             active_workspace: ActiveWorkspace::FleetStudio,
 
             fleet_books,
@@ -242,161 +246,616 @@ impl WriterCraftApp {
             }
         }
     }
+
+    fn repos_dir(&self) -> &'static Path {
+        if Path::new("on-metacraft").exists() {
+            Path::new(".")
+        } else {
+            Path::new("..")
+        }
+    }
+
+    fn sync_libraries(&mut self) {
+        let repos_dir = self.repos_dir();
+        self.fleet_books = self.engine.scan_all_fleet_books(repos_dir);
+        self.calibre_libraries = self.engine.discover_calibre_libraries();
+        self.load_selected_chapter();
+        self.execute_calibre_search();
+        self.status_msg = format!(
+            "Synced {} fleet books and {} Calibre libraries",
+            self.fleet_books.len(),
+            self.calibre_libraries.len()
+        );
+    }
+
+    fn export_typst(&mut self) {
+        let body = if let Some(text) = &self.active_chapter_content {
+            text.clone()
+        } else if !self.fountain_input.trim().is_empty() {
+            self.fountain_input.clone()
+        } else {
+            String::new()
+        };
+        if body.trim().is_empty() {
+            self.status_msg =
+                "Export needs an open chapter or screenplay text. Nothing was written.".to_string();
+            return;
+        }
+        let author = if self.auth_username.is_empty() {
+            "WriterCraft"
+        } else {
+            self.auth_username.as_str()
+        };
+        let typst = writercraft_core::scholar::ScholarAuditor::export_to_typst(
+            &self.generator_title,
+            &[author],
+            "",
+            &body,
+        );
+        let path = PathBuf::from("outbox").join("writercraft-export.typ");
+        match std::fs::create_dir_all("outbox").and_then(|_| std::fs::write(&path, &typst)) {
+            Ok(()) => {
+                self.status_msg = format!("Wrote {}", path.display());
+            }
+            Err(e) => {
+                self.status_msg = format!("Could not write {}: {e}", path.display());
+            }
+        }
+        self.export_body = typst;
+        self.dialog = HelpDialog::Export;
+    }
+
+    fn run_command(&mut self, id: &str) {
+        match id {
+            "fleet" => self.active_workspace = ActiveWorkspace::FleetStudio,
+            "calibre" => self.active_workspace = ActiveWorkspace::CalibreConnector,
+            "cork" => self.active_workspace = ActiveWorkspace::CorkboardArcs,
+            "screen" => self.active_workspace = ActiveWorkspace::ScreenplayFountain,
+            "scholar" => self.active_workspace = ActiveWorkspace::ScholarCitations,
+            "essays" => self.active_workspace = ActiveWorkspace::CraftDelectations,
+            "sync" => self.sync_libraries(),
+            "export" => {
+                self.export_typst();
+                return;
+            }
+            "romance" => {
+                let _ = self.engine.generate_beats(
+                    "Romance",
+                    &self.generator_title,
+                    &self.generator_protagonist,
+                );
+                self.active_workspace = ActiveWorkspace::CorkboardArcs;
+                self.status_msg = "Generated a Romance beat sheet on the corkboard.".to_string();
+            }
+            "thriller" => {
+                let _ = self.engine.generate_beats(
+                    "Thriller",
+                    &self.generator_title,
+                    &self.generator_protagonist,
+                );
+                self.active_workspace = ActiveWorkspace::CorkboardArcs;
+                self.status_msg = "Generated a Thriller beat sheet on the corkboard.".to_string();
+            }
+            "frank" => {
+                let sheet = self.engine.generate_frankenstein_beats(
+                    &self.generator_title,
+                    &self.generator_protagonist,
+                );
+                self.engine.active_scenes = sheet.beats;
+                self.active_workspace = ActiveWorkspace::CorkboardArcs;
+                self.status_msg = "Loaded the Frankenstein beat sheet on the corkboard.".to_string();
+            }
+            "essay0" => {
+                self.selected_essay_idx = 0;
+                self.active_workspace = ActiveWorkspace::CraftDelectations;
+            }
+            "essay1" => {
+                self.selected_essay_idx = 1;
+                self.active_workspace = ActiveWorkspace::CraftDelectations;
+            }
+            "essay2" => {
+                self.selected_essay_idx = 2;
+                self.active_workspace = ActiveWorkspace::CraftDelectations;
+            }
+            "essay3" => {
+                self.selected_essay_idx = 3;
+                self.active_workspace = ActiveWorkspace::CraftDelectations;
+            }
+            "essay4" => {
+                self.selected_essay_idx = 4;
+                self.active_workspace = ActiveWorkspace::CraftDelectations;
+            }
+            "theme" => self.is_dark_theme = !self.is_dark_theme,
+            "new" => {
+                self.fountain_input.clear();
+                self.active_workspace = ActiveWorkspace::ScreenplayFountain;
+                self.status_msg = "New screenplay draft in this session. Nothing was saved to disk."
+                    .to_string();
+            }
+            _ => {}
+        }
+        self.dialog = HelpDialog::None;
+    }
+
+    fn handle_keys(&mut self, ctx: &egui::Context) {
+        let (palette, shortcuts, export, new_doc, quit) = ctx.input(|i| {
+            let ctrl = i.modifiers.ctrl || i.modifiers.command;
+            let shift = i.modifiers.shift;
+            (
+                ctrl && (i.key_pressed(egui::Key::K) || (shift && i.key_pressed(egui::Key::P))),
+                i.key_pressed(egui::Key::F1) || (ctrl && i.key_pressed(egui::Key::Slash)),
+                ctrl && i.key_pressed(egui::Key::E),
+                ctrl && i.key_pressed(egui::Key::N),
+                ctrl && i.key_pressed(egui::Key::Q),
+            )
+        });
+        if quit {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        } else if palette {
+            self.palette_query.clear();
+            self.dialog = HelpDialog::Palette;
+        } else if shortcuts {
+            self.dialog = HelpDialog::Shortcuts;
+        } else if export {
+            self.export_typst();
+        } else if new_doc {
+            self.run_command("new");
+        }
+    }
+
+    fn draw_dialogs(&mut self, ctx: &egui::Context) {
+        let dlg = self.dialog;
+        if dlg == HelpDialog::None {
+            return;
+        }
+        let title = match dlg {
+            HelpDialog::Palette => "Command Palette",
+            HelpDialog::Shortcuts => "Keyboard Shortcuts",
+            HelpDialog::Docs => "Project Files and Docs",
+            HelpDialog::Licenses => "Licenses and Notices",
+            HelpDialog::About => "About WriterCraft",
+            HelpDialog::Preferences => "Preferences",
+            HelpDialog::Export => "Typst export",
+            HelpDialog::None => return,
+        };
+        let mut open = true;
+        egui::Window::new(title)
+            .collapsible(false)
+            .resizable(true)
+            .default_width(640.0)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical().max_height(480.0).show(ui, |ui| {
+                    match dlg {
+                        HelpDialog::Palette => self.draw_palette(ui),
+                        HelpDialog::Shortcuts => {
+                            for (key, what) in [
+                                ("Ctrl + mouse wheel", "Zoom the whole interface"),
+                                ("Ctrl + =  /  Ctrl + -", "Zoom in / zoom out"),
+                                ("Ctrl + 0", "Reset zoom to 100%"),
+                                ("Ctrl + N", "New screenplay draft in this session"),
+                                ("Ctrl + E", "Export the open chapter or screenplay to Typst"),
+                                ("Ctrl + K  /  Ctrl + Shift + P", "Command palette"),
+                                ("F1  /  Ctrl + /", "This shortcut list"),
+                                ("Ctrl + Q", "Quit"),
+                            ] {
+                                ui.label(format!("{key}    {what}"));
+                            }
+                            ui.separator();
+                            ui.label("Cut, copy, and paste are the usual keys inside a text field. There is no document-wide undo.");
+                        }
+                        HelpDialog::Docs => {
+                            ui.label("These files are in the writercraft repo. Open them in an editor. This window does not fetch them.");
+                            ui.add_space(6.0);
+                            for path in [
+                                "README.md",
+                                "AGENTS.md",
+                                "HANDOVER.md",
+                                "docs/PRD.md",
+                                "docs/TIERED_PLAN.md",
+                                "docs/TOOLS.md",
+                                "docs/THE_CLASSICAL_CANON.md",
+                                "docs/THE_SPECULATIVE_FRONTIER.md",
+                                "docs/TROPE_SMORGASBORD.md",
+                                "docs/WRITER_AND_AI_DIALECTIC.md",
+                                "docs/PUBLISHING_AVENUES.md",
+                            ] {
+                                ui.monospace(path);
+                            }
+                        }
+                        HelpDialog::Licenses => {
+                            ui.label("WriterCraft 0.3.1 is MIT OR Apache-2.0.");
+                            ui.label("Desktop UI: eframe and egui 0.37. Also clap 4, serde, serde_json, tokio, chrono.");
+                            ui.label("The core crate reads Calibre libraries with rusqlite 0.40 (bundled SQLite). Search is read-only.");
+                            ui.label("This workspace does not declare forbid(unsafe_code). Do not treat the binary as a proven safe-Rust build.");
+                            ui.label("Fleet book scan reads markdown under the sibling on-* repos when they are present. It does not publish or send mail.");
+                        }
+                        HelpDialog::About => {
+                            ui.heading("WriterCraft 0.3.1");
+                            ui.label("A desktop studio for the fleet novels, a read-only Calibre search, corkboard beat sheets, Fountain screenplay notes, BibTeX, and the craft essays.");
+                            ui.label("Control port label: 14121. That number is a status id. This window does not listen on it.");
+                            ui.label("What it does: scan on-ai-takeover, on-hyperwar, on-hyperart, on-metacraft, and on-hypermind when those folders sit next to the repo; search a local Calibre library; generate beat sheets; export the open chapter or screenplay to outbox/writercraft-export.typ.");
+                            ui.label("What it does not do: save a project file, undo, talk to a live model, or send syndication drafts.");
+                        }
+                        HelpDialog::Preferences => {
+                            ui.label("Theme");
+                            if ui.button("Dark").clicked() {
+                                self.is_dark_theme = true;
+                            }
+                            if ui.button("Light").clicked() {
+                                self.is_dark_theme = false;
+                            }
+                            ui.separator();
+                            ui.label("Language is the code menu on the right of the menu bar. Most chrome is still English.");
+                            ui.label("Zoom is Ctrl+wheel, or the percent button on the menu bar.");
+                        }
+                        HelpDialog::Export => {
+                            ui.label(&self.status_msg);
+                            ui.add_space(6.0);
+                            ui.monospace(&self.export_body);
+                        }
+                        HelpDialog::None => {}
+                    }
+                });
+            });
+        if !open {
+            self.dialog = HelpDialog::None;
+        }
+    }
+
+    fn draw_palette(&mut self, ui: &mut egui::Ui) {
+        ui.label("Type to filter. Click a row to run it.");
+        ui.text_edit_singleline(&mut self.palette_query);
+        ui.add_space(6.0);
+        let q = self.palette_query.to_lowercase();
+        let rows = [
+            ("Open Fleet Books", "fleet"),
+            ("Open Calibre", "calibre"),
+            ("Open corkboard", "cork"),
+            ("Open screenplay", "screen"),
+            ("Open scholar", "scholar"),
+            ("Open delectations", "essays"),
+            ("Sync fleet books and Calibre", "sync"),
+            ("Export Typst", "export"),
+            ("New screenplay draft", "new"),
+            ("Romance beat sheet", "romance"),
+            ("Thriller beat sheet", "thriller"),
+            ("Frankenstein beat sheet", "frank"),
+            ("Essay: the writer and the model", "essay0"),
+            ("Essay: classics", "essay1"),
+            ("Essay: hard science fiction", "essay2"),
+            ("Essay: tropes", "essay3"),
+            ("Essay: publishing", "essay4"),
+            ("Toggle theme", "theme"),
+        ];
+        for (label, id) in rows {
+            if q.is_empty() || label.to_lowercase().contains(&q) {
+                if ui.button(label).clicked() {
+                    self.run_command(id);
+                }
+            }
+        }
+    }
+}
+
+fn harsh_visuals() -> egui::Visuals {
+    let mut visuals = egui::Visuals::dark();
+    let ink = egui::Color32::from_rgb(242, 246, 252);
+    visuals.override_text_color = Some(ink);
+    visuals.weak_text_color = Some(egui::Color32::from_rgb(203, 213, 225));
+    visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, ink);
+    visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, ink);
+    visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, egui::Color32::WHITE);
+    visuals.widgets.active.fg_stroke = egui::Stroke::new(1.5, egui::Color32::WHITE);
+    visuals
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HelpDialog {
+    None,
+    Palette,
+    Shortcuts,
+    Docs,
+    Licenses,
+    About,
+    Preferences,
+    Export,
+}
+
+fn configure_typography(ctx: &egui::Context) {
+    ctx.all_styles_mut(|style| {
+        style.text_styles.insert(
+            egui::TextStyle::Heading,
+            egui::FontId::new(23.0, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Body,
+            egui::FontId::new(16.0, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Button,
+            egui::FontId::new(16.0, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Monospace,
+            egui::FontId::new(14.0, egui::FontFamily::Monospace),
+        );
+        // Stock Small is 9px, which reads as about 4pt on this window.
+        style.text_styles.insert(
+            egui::TextStyle::Small,
+            egui::FontId::new(14.0, egui::FontFamily::Proportional),
+        );
+        style.spacing.button_padding = egui::vec2(10.0, 6.0);
+        style.spacing.item_spacing = egui::vec2(8.0, 6.0);
+    });
+}
+
+/// Ctrl+wheel uses egui's zoom_delta. Ctrl+Plus, Ctrl+Minus, and Ctrl+0
+/// are applied here so zoom does not depend on a hidden default.
+fn handle_zoom(ctx: &egui::Context) {
+    let (wheel, plus, minus, reset) = ctx.input(|i| {
+        let ctrl = i.modifiers.ctrl || i.modifiers.command;
+        (
+            i.zoom_delta(),
+            ctrl && (i.key_pressed(egui::Key::Plus) || i.key_pressed(egui::Key::Equals)),
+            ctrl && i.key_pressed(egui::Key::Minus),
+            ctrl && i.key_pressed(egui::Key::Num0),
+        )
+    });
+    let mut factor = ctx.zoom_factor();
+    if reset {
+        factor = 1.0;
+    } else if plus {
+        factor = (factor * 1.1).clamp(0.6, 2.5);
+    } else if minus {
+        factor = (factor / 1.1).clamp(0.6, 2.5);
+    } else if (wheel - 1.0).abs() > f32::EPSILON {
+        factor = (factor * wheel).clamp(0.6, 2.5);
+    } else {
+        return;
+    }
+    ctx.set_zoom_factor(factor);
+}
+
+fn crisp_light_visuals() -> egui::Visuals {
+    let mut visuals = egui::Visuals::light();
+    let ink = egui::Color32::BLACK;
+    visuals.override_text_color = Some(ink);
+    visuals.weak_text_color = Some(ink);
+    visuals.panel_fill = egui::Color32::WHITE;
+    visuals.window_fill = egui::Color32::WHITE;
+    visuals.extreme_bg_color = egui::Color32::WHITE;
+    visuals.faint_bg_color = egui::Color32::WHITE;
+    visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, ink);
+    visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, ink);
+    visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, ink);
+    visuals.widgets.active.fg_stroke = egui::Stroke::new(1.5, ink);
+    visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0, ink);
+    visuals
 }
 
 impl eframe::App for WriterCraftApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         if self.is_dark_theme {
-            ui.ctx().set_visuals(egui::Visuals::dark());
+            ui.ctx().set_visuals(harsh_visuals());
         } else {
-            ui.ctx().set_visuals(egui::Visuals::light());
+            ui.ctx().set_visuals(crisp_light_visuals());
         }
+        configure_typography(ui.ctx());
+        handle_zoom(ui.ctx());
+        self.handle_keys(ui.ctx());
 
-        // 0. Desktop Menu Bar
+        // 0. Desktop menu bar: File Edit View, domain, Window Help.
         egui::Panel::top("desktop_menu_bar").show(ui, |ui| {
-            ui.horizontal(|ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("Export Manuscript to Typst/LaTeX...").clicked() {
-                        self.status_msg = "Exported manuscript to Typst format".to_string();
+                    if ui.button("New screenplay    Ctrl+N").clicked() {
+                        self.run_command("new");
                         ui.close();
                     }
-                    if ui.button("Sync Fleet Books & Calibre").clicked() {
-                        let repos_dir = if Path::new("on-metacraft").exists() {
-            Path::new(".")
-        } else {
-            Path::new("..")
-        };
-                        self.fleet_books = self.engine.scan_all_fleet_books(repos_dir);
-                        self.calibre_libraries = self.engine.discover_calibre_libraries();
-                        self.load_selected_chapter();
-                        self.execute_calibre_search();
-                        self.status_msg = "Synchronized fleet books and Calibre libraries".to_string();
+                    if ui.button("Open Fleet Books Studio").clicked() {
+                        self.run_command("fleet");
+                        ui.close();
+                    }
+                    if ui.button("Sync fleet books and Calibre").clicked() {
+                        self.sync_libraries();
                         ui.close();
                     }
                     ui.separator();
-                    if ui.button("Exit").clicked() {
+                    if ui.button("Export Typst...    Ctrl+E").clicked() {
+                        self.export_typst();
+                        ui.close();
+                    }
+                    if ui.button("Save").clicked() {
+                        self.status_msg = "There is no project file. Export Typst writes outbox/writercraft-export.typ.".to_string();
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.button("Quit    Ctrl+Q").clicked() {
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
-
-                ui.menu_button("Narrative", |ui| {
-                    if ui.button("Generate Romance Beat Sheet").clicked() {
-                        let _ = self.engine.generate_beats("Romance", &self.generator_title, &self.generator_protagonist);
-                        self.active_workspace = ActiveWorkspace::CorkboardArcs;
-                        self.status_msg = "Generated Romance beat sheet".to_string();
+                ui.menu_button("Edit", |ui| {
+                    if ui.button("Undo").clicked() {
+                        self.status_msg = "Undo is not kept for this session.".to_string();
                         ui.close();
                     }
-                    if ui.button("Generate Thriller Beat Sheet").clicked() {
-                        let _ = self.engine.generate_beats("Thriller", &self.generator_title, &self.generator_protagonist);
-                        self.active_workspace = ActiveWorkspace::CorkboardArcs;
-                        self.status_msg = "Generated Thriller beat sheet".to_string();
+                    if ui.button("Redo").clicked() {
+                        self.status_msg = "Redo is not kept for this session.".to_string();
                         ui.close();
                     }
-                    if ui.button("⚡ Load Frankenstein Smorgasbord Beat Sheet").clicked() {
-                        let sheet = self.engine.generate_frankenstein_beats(&self.generator_title, &self.generator_protagonist);
-                        self.engine.active_scenes = sheet.beats;
-                        self.active_workspace = ActiveWorkspace::CorkboardArcs;
-                        self.status_msg = "Loaded Frankenstein Smorgasbord beat sheet into Corkboard".to_string();
+                    ui.separator();
+                    if ui.button("Cut / Copy / Paste").clicked() {
+                        self.status_msg = "Cut, copy, and paste work in the focused text field.".to_string();
                         ui.close();
                     }
-                });
-
-                ui.menu_button("Delectations", |ui| {
-                    if ui.button("🧠 The Writer & His AI Companion").clicked() {
-                        self.active_workspace = ActiveWorkspace::CraftDelectations;
-                        self.selected_essay_idx = 0;
-                        ui.close();
-                    }
-                    if ui.button("🏛️ What Makes Classics Classics? (Dickens & Dostoevsky)").clicked() {
-                        self.active_workspace = ActiveWorkspace::CraftDelectations;
-                        self.selected_essay_idx = 1;
-                        ui.close();
-                    }
-                    if ui.button("🚀 Hard Sci-Fi, Banks' Minds & The Great RSI Novel").clicked() {
-                        self.active_workspace = ActiveWorkspace::CraftDelectations;
-                        self.selected_essay_idx = 2;
-                        ui.close();
-                    }
-                    if ui.button("🎭 Trope Smorgasbord & Clichés").clicked() {
-                        self.active_workspace = ActiveWorkspace::CraftDelectations;
-                        self.selected_essay_idx = 3;
-                        ui.close();
-                    }
-                    if ui.button("📦 Publishing Avenues & Coral Hart Paradox").clicked() {
-                        self.active_workspace = ActiveWorkspace::CraftDelectations;
-                        self.selected_essay_idx = 4;
+                    ui.separator();
+                    if ui.button("Preferences...").clicked() {
+                        self.dialog = HelpDialog::Preferences;
                         ui.close();
                     }
                 });
-
                 ui.menu_button("View", |ui| {
-                    let theme_label = if self.is_dark_theme { "☀ Switch to Light Theme" } else { "🌙 Switch to Dark Theme" };
-                    if ui.button(theme_label).clicked() {
-                        self.is_dark_theme = !self.is_dark_theme;
+                    if ui.button("Zoom in    Ctrl+=").clicked() {
+                        let z = (ui.ctx().zoom_factor() * 1.1).clamp(0.6, 2.5);
+                        ui.ctx().set_zoom_factor(z);
+                        ui.close();
+                    }
+                    if ui.button("Zoom out    Ctrl+-").clicked() {
+                        let z = (ui.ctx().zoom_factor() / 1.1).clamp(0.6, 2.5);
+                        ui.ctx().set_zoom_factor(z);
+                        ui.close();
+                    }
+                    if ui.button("Reset zoom 100%    Ctrl+0").clicked() {
+                        ui.ctx().set_zoom_factor(1.0);
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.button("Dark theme").clicked() {
+                        self.is_dark_theme = true;
+                        ui.close();
+                    }
+                    if ui.button("Light theme").clicked() {
+                        self.is_dark_theme = false;
                         ui.close();
                     }
                 });
-
-                ui.menu_button("Security", |ui| {
-                    if self.is_authenticated {
-                        ui.label(format!("Author: {}", self.auth_username));
-                        if ui.button("Sign Out").clicked() {
-                            self.is_authenticated = false;
-                            self.status_msg = "Signed out".to_string();
+                ui.menu_button("Narrative", |ui| {
+                    if ui.button("Romance beat sheet").clicked() {
+                        self.run_command("romance");
+                        ui.close();
+                    }
+                    if ui.button("Thriller beat sheet").clicked() {
+                        self.run_command("thriller");
+                        ui.close();
+                    }
+                    if ui.button("Frankenstein beat sheet").clicked() {
+                        self.run_command("frank");
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.button("Open corkboard").clicked() {
+                        self.run_command("cork");
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Delectations", |ui| {
+                    for (label, id) in [
+                        ("The writer and the model", "essay0"),
+                        ("What makes classics classics", "essay1"),
+                        ("Hard science fiction", "essay2"),
+                        ("Trope smorgasbord", "essay3"),
+                        ("Publishing avenues", "essay4"),
+                    ] {
+                        if ui.button(label).clicked() {
+                            self.run_command(id);
                             ui.close();
                         }
-                    } else if ui.button("Basic Auth Login...").clicked() {
+                    }
+                });
+                ui.menu_button("Scholar", |ui| {
+                    if ui.button("Open Scholar and BibTeX").clicked() {
+                        self.run_command("scholar");
+                        ui.close();
+                    }
+                    if ui.button("Open screenplay").clicked() {
+                        self.run_command("screen");
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Window", |ui| {
+                    if ui.button("Reset to Fleet Books").clicked() {
+                        self.run_command("fleet");
+                        ui.close();
+                    }
+                    ui.separator();
+                    for (label, ws) in [
+                        ("Fleet Books", ActiveWorkspace::FleetStudio),
+                        ("Calibre", ActiveWorkspace::CalibreConnector),
+                        ("Corkboard", ActiveWorkspace::CorkboardArcs),
+                        ("Screenplay", ActiveWorkspace::ScreenplayFountain),
+                        ("Scholar", ActiveWorkspace::ScholarCitations),
+                        ("Delectations", ActiveWorkspace::CraftDelectations),
+                    ] {
+                        let mut on = self.active_workspace == ws;
+                        if ui.checkbox(&mut on, label).changed() && on {
+                            self.active_workspace = ws;
+                        }
+                    }
+                    ui.separator();
+                    if self.is_authenticated {
+                        ui.label(format!("Signed in: {}", self.auth_username));
+                        if ui.button("Sign out").clicked() {
+                            self.is_authenticated = false;
+                            self.status_msg = "Signed out.".to_string();
+                            ui.close();
+                        }
+                    } else if ui.button("Sign in...").clicked() {
                         self.show_auth_modal = true;
                         ui.close();
                     }
                 });
-
                 ui.menu_button("Help", |ui| {
+                    if ui.button("Command Palette...    Ctrl+K").clicked() {
+                        self.palette_query.clear();
+                        self.dialog = HelpDialog::Palette;
+                        ui.close();
+                    }
+                    if ui.button("Keyboard Shortcuts...    F1").clicked() {
+                        self.dialog = HelpDialog::Shortcuts;
+                        ui.close();
+                    }
+                    if ui.button("Project Files & Docs...").clicked() {
+                        self.dialog = HelpDialog::Docs;
+                        ui.close();
+                    }
+                    if ui.button("Licenses & Notices...").clicked() {
+                        self.dialog = HelpDialog::Licenses;
+                        ui.close();
+                    }
                     if ui.button("About WriterCraft").clicked() {
-                        self.show_about_dialog = true;
+                        self.dialog = HelpDialog::About;
                         ui.close();
                     }
                 });
-
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let cur_loc = self.locale;
-                    let label = format!("{} {}", cur_loc.flag(), cur_loc.code().to_uppercase());
+                    let pct = (ui.ctx().zoom_factor() * 100.0).round();
+                    if ui.button(format!("{pct:.0}%")).clicked() {
+                        ui.ctx().set_zoom_factor(1.0);
+                    }
+                    let cur = self.locale;
                     egui::ComboBox::from_id_salt("topbar_locale_selector")
-                        .selected_text(label)
+                        .selected_text(cur.code().to_uppercase())
                         .show_ui(ui, |ui| {
                             for loc_item in writercraft_core::i18n::AppLocale::all() {
-                                let text = format!("{} {}", loc_item.flag(), loc_item.display_name());
+                                let text = format!(
+                                    "{} ({})",
+                                    loc_item.display_name(),
+                                    loc_item.code().to_uppercase()
+                                );
                                 let _ = ui.selectable_value(&mut self.locale, *loc_item, text);
                             }
                         });
-
-                    let (icon, label) = if self.is_dark_theme { ("☀", "Light") } else { ("🌙", "Dark") };
-                    if ui.small_button(format!("{icon} {label}")).clicked() {
+                    let theme = if self.is_dark_theme { "Light" } else { "Dark" };
+                    if ui.button(theme).clicked() {
                         self.is_dark_theme = !self.is_dark_theme;
-                    }
-
-                    if self.is_authenticated {
-                        ui.colored_label(egui::Color32::from_rgb(244, 114, 182), format!("🖋 {}", self.auth_username));
-                    } else if ui.small_button("🔑 Login").clicked() {
-                        self.show_auth_modal = true;
                     }
                 });
             });
         });
 
-        // 1. Primary Workspace Switcher
         egui::Panel::top("primary_tabs").show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.heading("✍️ WriterCraft");
+                ui.heading("WriterCraft");
                 ui.separator();
-                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::FleetStudio, "📚 Fleet Books Studio");
-                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::CalibreConnector, "🗃️ Calibre Connector");
-                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::CorkboardArcs, "📌 Corkboard & Arcs");
-                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::ScreenplayFountain, "🎬 Screenplay (Fountain)");
-                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::ScholarCitations, "🎓 Scholar & BibTeX");
-                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::CraftDelectations, "📖 Craft Delectations");
+                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::FleetStudio, "Fleet Books");
+                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::CalibreConnector, "Calibre");
+                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::CorkboardArcs, "Corkboard");
+                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::ScreenplayFountain, "Screenplay");
+                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::ScholarCitations, "Scholar");
+                ui.selectable_value(&mut self.active_workspace, ActiveWorkspace::CraftDelectations, "Delectations");
                 ui.separator();
-                ui.label(egui::RichText::new(&self.status_msg).small().color(egui::Color32::from_rgb(148, 163, 184)));
+                ui.label(&self.status_msg);
             });
         });
 
@@ -1040,9 +1499,9 @@ impl eframe::App for WriterCraftApp {
                             painter.line_segment([egui::pos2(rect.left(), mid_y), egui::pos2(rect.right(), mid_y)], egui::Stroke::new(1.0, egui::Color32::from_rgb(51, 65, 85)));
 
                             // Labels
-                            painter.text(egui::pos2(rect.left() + 8.0, rect.top() + 6.0), egui::Align2::LEFT_TOP, "+1.0 Triumph", egui::FontId::proportional(11.0), egui::Color32::from_rgb(34, 197, 94));
-                            painter.text(egui::pos2(rect.left() + 8.0, mid_y - 2.0), egui::Align2::LEFT_BOTTOM, "0.0 Neutral", egui::FontId::proportional(11.0), egui::Color32::from_rgb(148, 163, 184));
-                            painter.text(egui::pos2(rect.left() + 8.0, rect.bottom() - 6.0), egui::Align2::LEFT_BOTTOM, "-1.0 Despair", egui::FontId::proportional(11.0), egui::Color32::from_rgb(239, 68, 68));
+                            painter.text(egui::pos2(rect.left() + 8.0, rect.top() + 6.0), egui::Align2::LEFT_TOP, "+1.0 Triumph", egui::FontId::proportional(16.0), egui::Color32::from_rgb(34, 197, 94));
+                            painter.text(egui::pos2(rect.left() + 8.0, mid_y - 2.0), egui::Align2::LEFT_BOTTOM, "0.0 Neutral", egui::FontId::proportional(16.0), egui::Color32::from_rgb(148, 163, 184));
+                            painter.text(egui::pos2(rect.left() + 8.0, rect.bottom() - 6.0), egui::Align2::LEFT_BOTTOM, "-1.0 Despair", egui::FontId::proportional(16.0), egui::Color32::from_rgb(239, 68, 68));
 
                             let scenes = &self.engine.active_scenes;
                             if !scenes.is_empty() {
@@ -1074,7 +1533,7 @@ impl eframe::App for WriterCraftApp {
                                         egui::Color32::from_rgb(234, 179, 8)
                                     };
                                     painter.circle_filled(*pt, 6.0, node_color);
-                                    painter.text(egui::pos2(pt.x, pt.y - 10.0), egui::Align2::CENTER_BOTTOM, &sc.scene_id, egui::FontId::proportional(10.0), egui::Color32::from_rgb(226, 232, 240));
+                                    painter.text(egui::pos2(pt.x, pt.y - 10.0), egui::Align2::CENTER_BOTTOM, &sc.scene_id, egui::FontId::proportional(16.0), egui::Color32::from_rgb(226, 232, 240));
                                 }
                             }
 
@@ -1489,7 +1948,7 @@ impl eframe::App for WriterCraftApp {
                                 } else if line.starts_with("- ") || line.starts_with("* ") {
                                     ui.label(format!("  • {}", &line[2..]));
                                 } else if line.starts_with("|") {
-                                    ui.label(egui::RichText::new(line).monospace().size(11.0));
+                                    ui.label(egui::RichText::new(line).monospace().size(16.0));
                                 } else if line.starts_with("```") {
                                     ui.label(egui::RichText::new(line).monospace().color(egui::Color32::from_rgb(148, 163, 184)));
                                 } else if line.trim().is_empty() {
@@ -1536,25 +1995,7 @@ impl eframe::App for WriterCraftApp {
                 });
         }
 
-        // Modal: About Dialog
-        if self.show_about_dialog {
-            egui::Window::new("ℹ About WriterCraft")
-                .collapsible(false)
-                .resizable(false)
-                .show(ui.ctx(), |ui| {
-                    ui.heading("WriterCraft Sovereign Studio");
-                    ui.label("Multi-persona authoring, Calibre connector, and fleet continuation studio.");
-                    ui.label("Version: v0.3.1");
-                    ui.label("Control Port: 14121");
-                    ui.separator();
-                    ui.label("Interactive Fleet Books: on-ai-takeover, on-hyperwar, on-hyperart, on-metacraft, on-hypermind.");
-                    ui.label("Zero-lock read-only Calibre library search & metadata ingestion.");
-                    ui.add_space(8.0);
-                    if ui.button("Close").clicked() {
-                        self.show_about_dialog = false;
-                    }
-                });
-        }
+        self.draw_dialogs(ui.ctx());
     }
 }
 
