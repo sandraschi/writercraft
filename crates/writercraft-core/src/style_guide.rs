@@ -71,7 +71,7 @@ impl StyleLinter {
         ("here's the thing", "Blogger colloquialism masquerading as insight. Delete."),
         ("resonate", "New-age substitute for persuade, remind, or align. Be precise."),
         ("holistic", "Corporate buzzword. Name the whole system."),
-        ("sovereign", "Highfalutin EU-policy/crypto buzzword for 'local'. Say 'local', 'offline', or 'runs on your machine'."),
+        ("sovereign", "Highfalutin EU-policy/crypto buzzword. Say 'local', 'offline', or 'airgapped' (if zero-network mode is enforced)."),
         ("synergy", "Corporate fluff. Explain the compound effect."),
         ("seamlessly", "Almost never true in software or human systems. Show the seam."),
         ("seamless", "False perfection adjective. Show the friction points."),
