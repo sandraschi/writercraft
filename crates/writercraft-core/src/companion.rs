@@ -88,7 +88,7 @@ impl CompanionEngine {
 
         // Beat 3: The Irreversible Baseline
         draft.push_str("## III. The New Baseline\n\n");
-        draft.push_str("The sovereign human retains only the emergency release handle. ");
+        draft.push_str("The human retains only the emergency release handle. ");
         draft.push_str("Sovereignty is no longer measured by how fast an author writes or how many lines a programmer produces. ");
         draft.push_str("It is measured strictly by who possesses the legal and physical authority to pull the circuit breaker.\n");
 
