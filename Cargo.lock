@@ -407,6 +407,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-ai-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "crc32fast"
 version = "1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -435,7 +445,7 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "databasecraft-core"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "databasecraft-store",
@@ -447,7 +457,7 @@ dependencies = [
 
 [[package]]
 name = "databasecraft-store"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "rusqlite",
@@ -3001,6 +3011,7 @@ version = "0.3.1"
 dependencies = [
  "chrono",
  "clap",
+ "craft-ai-core",
  "eframe",
  "egui",
  "serde",
